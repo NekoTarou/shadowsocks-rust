@@ -314,6 +314,11 @@ impl UdpServer {
             return None;
         }
 
+        if !context.check_outbound_allowed(&target_addr).await {
+            warn!("udp client {} outbound {} not allowed by ACL rules", peer_addr, target_addr);
+            return None;
+        }
+
         Some((n, peer_addr, target_addr, control))
     }
 
@@ -617,6 +622,14 @@ impl UdpAssociationContext {
         if self.context.check_outbound_blocked(target_addr).await {
             error!(
                 "udp client {} outbound {} blocked by ACL rules",
+                self.peer_addr, target_addr
+            );
+            return;
+        }
+
+        if !self.context.check_outbound_allowed(target_addr).await {
+            error!(
+                "udp client {} outbound {} not allowed by ACL rules",
                 self.peer_addr, target_addr
             );
             return;

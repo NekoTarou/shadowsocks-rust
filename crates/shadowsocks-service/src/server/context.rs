@@ -101,6 +101,14 @@ impl ServiceContext {
         }
     }
 
+    /// Check if target should be allowed
+    pub async fn check_outbound_allowed(&self, addr: &Address) -> bool {
+        match self.acl {
+            None => true,
+            Some(ref acl) => acl.check_outbound_allowed(&self.context, addr).await,
+        }
+    }
+
     /// Check if client should be blocked
     pub fn check_client_blocked(&self, addr: &SocketAddr) -> bool {
         match self.acl {

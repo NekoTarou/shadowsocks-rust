@@ -202,6 +202,14 @@ impl TcpServerClient {
             return Ok(());
         }
 
+        if !self.context.check_outbound_allowed(&target_addr).await {
+            error!(
+                "tcp client {} outbound {} not allowed by ACL rules",
+                self.peer_addr, target_addr
+            );
+            return Ok(());
+        }
+
         let mut remote_stream = match timeout_fut(
             self.timeout,
             OutboundTcpStream::connect_remote_with_opts(
