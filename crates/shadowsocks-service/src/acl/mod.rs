@@ -334,6 +334,7 @@ impl ParsingRules {
 #[derive(Debug, Clone)]
 pub struct AccessControl {
     outbound_block: Rules,
+    outbound_allow: Rules,
     black_list: Rules,
     white_list: Rules,
     mode: Mode,
@@ -354,6 +355,7 @@ impl AccessControl {
         let mut mode = Mode::BlackList;
 
         let mut outbound_block = ParsingRules::new("[outbound_block_list]");
+        let mut outbound_allow = ParsingRules::new("[outbound_allow_list]");
         let mut bypass = ParsingRules::new("[black_list] or [bypass_list]");
         let mut proxy = ParsingRules::new("[white_list] or [proxy_list]");
         let mut curr = &mut bypass;
@@ -401,6 +403,10 @@ impl AccessControl {
                     curr = &mut outbound_block;
                     trace!("loading outbound_block_list");
                 }
+                "[outbound_allow_list]" => {
+                    curr = &mut outbound_allow;
+                    trace!("loading outbound_allow_list");
+                }
                 "[black_list]" | "[bypass_list]" => {
                     curr = &mut bypass;
                     trace!("loading black_list / bypass_list");
@@ -437,6 +443,7 @@ impl AccessControl {
         }
 
         Ok(Self {
+            outbound_allow: outbound_allow.into_rules()?,
             outbound_block: outbound_block.into_rules()?,
             black_list: bypass.into_rules()?,
             white_list: proxy.into_rules()?,
@@ -577,6 +584,30 @@ impl AccessControl {
                 if let Ok(vaddr) = context.dns_resolve(host, *port).await {
                     for addr in vaddr {
                         if self.outbound_block.check_ip_matched(&addr.ip()) {
+                            return true;
+                        }
+                    }
+                }
+
+                false
+            }
+        }
+    }
+
+    /// Check if outbound address is allow (for server)
+    ///
+    /// NOTE: `Address::DomainName` is only validated by regex rules,
+    pub async fn check_outbound_allowed(&self, context: &Context, outbound: &Address) -> bool {
+        match outbound {
+            Address::SocketAddress(saddr) => self.outbound_allow.check_ip_matched(&saddr.ip()),
+            Address::DomainNameAddress(host, port) => {
+                if self.outbound_allow.check_host_matched(&Self::convert_to_ascii(host)) {
+                    return true;
+                }
+
+                if let Ok(vaddr) = context.dns_resolve(host, *port).await {
+                    for addr in vaddr {
+                        if self.outbound_allow.check_ip_matched(&addr.ip()) {
                             return true;
                         }
                     }
